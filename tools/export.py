@@ -48,7 +48,7 @@ def snapshot():
     tasks = []
     for r in rows(cfg["db_id"]):
         tasks.append({
-            "id": r["id"].replace("-", "")[:12],
+            "id": r["id"].replace("-", ""),   # 先頭だけだと同じDBのページで重複する
             "name": val(r, "タスク名"), "st": val(r, "状態"), "pri": val(r, "優先度"),
             "due": val(r, "期限"), "proj": val(r, "プロジェクト"), "who": val(r, "担当者"),
             "next": val(r, "次のアクション"), "src": val(r, "元の場所"), "url": val(r, "元リンク"),

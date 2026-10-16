@@ -69,6 +69,8 @@ try {
   const total = await ev("state.snap?.tasks.length || 0");
   check("復号して表示", !await ev("document.querySelector('#app').hidden") && total > 0, `${total}件`);
   const counts = await ev(`Object.fromEntries(${JSON.stringify(["call","work","queue","alert","done"])}.map(b=>[b,state.tasks.filter(t=>t.b===b).length]))`);
+  check("タスクIDが重複しない", await ev("new Set(state.snap.tasks.map(t=>t.id)).size === state.snap.tasks.length"));
+  check("今日のタスクの件数と中身が合う", await ev("(()=>{const n=document.querySelectorAll('#todayList .row').length;const all=state.tasks.filter(t=>t.b!=='done'&&(t.today||(t.due&&t.due<=todayISO()))).length;return all===0||n>0})()"));
   check("5分類の合計＝全件", Object.values(counts).reduce((a, b) => a + b, 0) === total, JSON.stringify(counts));
   check("中央の数字＝判断待ち", await ev("document.querySelector('#coreNum').textContent") == counts.call);
   check("判断待ちカード3件以内", await ev("document.querySelectorAll('#callList .call').length") <= 3);
@@ -98,7 +100,7 @@ try {
 
   // 6) 開閉・リンク
   await ev("document.querySelector('#taskList .task-btn').click()"); await sleep(100);
-  check("タスクを開くと詳細とリンク", await ev("!!document.querySelector('#taskList .task.open .links a.cy[href^=\"https://\"]')"));
+  check("タスクを開くと詳細とリンク（開くのは1件だけ）", await ev("!!document.querySelector('#taskList .task.open .links a.cy[href^=\"https://\"]') && document.querySelectorAll('#taskList .task.open').length===1"));
   await shot("04_list_open", false);
   await ev("document.querySelector('#callList .call')?.click()"); await sleep(600);
   check("判断待ちカード→一覧の該当タスクが開く", await ev("document.querySelectorAll('#taskList .task.open').length") >= 1);

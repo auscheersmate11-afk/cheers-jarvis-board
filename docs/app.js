@@ -8,11 +8,11 @@ const CACHE_STORE = "jarvis.snap";
 
 // 5つの大分類（色は CSS 変数と同じ値）
 const BUCKETS = [
-  { id: "call",  ja: "判断待ち",    en: "AWAITING",   color: "#ff3347" },
-  { id: "work",  ja: "作業中",      en: "PROCESSING", color: "#a8e6ff" },
-  { id: "queue", ja: "順番待ち",    en: "QUEUE",      color: "#9a8270" },
-  { id: "alert", ja: "要注意／停止", en: "ALERT",      color: "#ff8a3d" },
-  { id: "done",  ja: "完了",        en: "COMPLETE",   color: "#e8d3a0" },
+  { id: "call",  ja: "判断待ち",    color: "#ff4d5e" },
+  { id: "work",  ja: "作業中",      color: "#8fd3f4" },
+  { id: "queue", ja: "順番待ち",    color: "#9a9aa6" },
+  { id: "alert", ja: "要注意・停止", color: "#f5a524" },
+  { id: "done",  ja: "完了",        color: "#6fd09a" },
 ];
 const B = Object.fromEntries(BUCKETS.map(b => [b.id, b]));
 const PRI = { "高": 0, "中": 1, "要確認": 2, "低": 3, "": 4 };
@@ -76,7 +76,7 @@ async function load({ manual = false } = {}) {
     render();
     if (manual) toast(`更新しました（${state.snap.tasks.length}件）`);
   } catch (e) {
-    setPill("通信エラー", false);
+    setPill("通信エラー", "warn");
     toast("読み込めませんでした：" + e.message);
   } finally { btn.classList.remove("spin"); }
 }
@@ -91,11 +91,12 @@ function forgetPass() { localStorage.removeItem(KEY_STORE); }
 function showLock(msg = "") {
   $("#app").hidden = true; $("#lock").hidden = false;
   $("#lockErr").textContent = msg;
-  setPill("ロック中", false);
+  setPill("ロック中", "");
   setTimeout(() => $("#pw").focus(), 50);
 }
-function setPill(text, ok) {
-  const p = $("#sysPill"); p.classList.toggle("ok", ok); p.querySelector("span").textContent = text;
+function setPill(text, kind) {
+  const p = $("#sysPill"); p.classList.toggle("ok", kind === "ok"); p.classList.toggle("warn", kind === "warn");
+  p.querySelector("span").textContent = text;
 }
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function safeUrl(u) { return /^https?:\/\//.test(u || "") ? u : ""; }
@@ -106,84 +107,67 @@ function render() {
   state.tasks = tasks;
   const n = Object.fromEntries(BUCKETS.map(b => [b.id, tasks.filter(t => t.b === b.id).length]));
   const open = tasks.filter(t => t.b !== "done");
-  const highOpen = open.filter(isHigh);
-  const todayOpen = open.filter(t => t.today || (t.due && t.due <= today));
 
   $("#lock").hidden = true; $("#app").hidden = false;
-  setPill(n.alert ? "要注意あり" : "稼働中", !n.alert);
+  setPill(n.alert ? `要注意 ${n.alert}` : "稼働中", n.alert ? "warn" : "ok");
 
-  // 中央のリアクター
+  // 稼働状況：中央は判断待ち、下に4つの状態（数字・ラベル・色だけ）
   drawReactor(n, tasks.length);
   $("#coreNum").textContent = n.call;
-  $("#corePill").innerHTML = n.call
-    ? `<span><i></i>判断待ち ${n.call}件</span>`
-    : `<span class="clear"><i></i>判断待ちなし</span>`;
-  $("#coreSub").textContent = n.work ? `いま作業中 ${n.work}件・順番待ち ${n.queue}件` : `作業中のものはありません・順番待ち ${n.queue}件`;
-  $("#legend").innerHTML = BUCKETS.filter(b => b.id !== "call")
-    .map(b => `<li><i style="background:${b.color}"></i>${b.ja}<b>${n[b.id]}</b></li>`).join("");
+  $("#coreSub").textContent = `未完了 ${open.length}件・完了 ${n.done}件`;
+  $("#stats").innerHTML = ["call", "work", "alert", "queue"].map(id => {
+    const b = B[id];
+    return `<button class="stat bar${id === "call" ? " is-call" : ""}" data-jump="${id}" style="--c:${b.color}" aria-label="${b.ja} ${n[id]}件">
+      <span class="stat-l">${b.ja}</span><span class="stat-n">${n[id]}</span></button>`;
+  }).join("");
 
-  // 判断待ち：高優先→期限→名前の順に3件
+  // 要対応：判断待ちを重要→期限→名前の順に3件
   const calls = tasks.filter(t => t.b === "call").sort(sortKey);
+  $("#callN").textContent = calls.length ? `${calls.length}件` : "";
   $("#callList").innerHTML = calls.length
     ? calls.slice(0, 3).map(callItem).join("") + (calls.length > 3 ? `<button class="more" data-jump="call">判断待ちをすべて見る（${calls.length}件）</button>` : "")
-    : `<div class="empty"><i>✓</i>判断待ちなし</div><p class="call-next">ゆうすけさんの判断で止まっている業務はありません。</p>`;
+    : `<div class="empty"><b>✓</b> 判断待ちはありません</div>`;
 
-  // 今日やること：今日やる✓ or 期限が今日まで（期限切れ含む）
-  const todays = todayOpen.sort(sortKey);
+  // 今日のタスク：今日やる✓ or 期限が今日まで。要対応に出したものは重ねない
+  const shown = new Set(calls.slice(0, 3).map(t => t.id));
+  const todaysAll = open.filter(t => t.today || (t.due && t.due <= today)).sort(sortKey);
+  const todays = todaysAll.filter(t => !shown.has(t.id));
+  $("#todayN").textContent = todaysAll.length ? `${todaysAll.length}件` : "";
   $("#todayList").innerHTML = todays.length
-    ? todays.slice(0, 5).map(callItem).join("") + (todays.length > 5 ? `<button class="more" data-jump="today">今日やることをすべて見る（${todays.length}件）</button>` : "")
-    : `<div class="empty"><i>✓</i>今日やることはありません</div>`;
+    ? `<div class="rows">${todays.slice(0, 6).map(rowItem).join("")}${todays.length > 6 ? `<button class="more" data-jump="today">今日のタスクをすべて見る（${todaysAll.length}件）</button>` : ""}</div>`
+    : `<div class="rows"><div class="empty">ほかに今日のタスクはありません</div></div>`;
 
-  // SYSTEM STATUS
-  const done = n.done, total = tasks.length || 1;
-  const gauges = [
-    { en: "TODAY", ja: "今日やる", v: todays.length, max: open.length, c: "#ff6a72", jump: "today" },
-    { en: "PRIORITY", ja: "重要", v: highOpen.length, max: open.length, c: "#ff2a3d", jump: "high" },
-    { en: "OVERDUE", ja: "期限切れ", v: open.filter(t => t.over).length, max: open.length, c: "#ff8a3d", jump: "alert" },
-    { en: "DONE", ja: "完了", v: done, max: total, c: "#e8d3a0", jump: "done" },
-  ];
-  $("#gauges").innerHTML = gauges.map(g => {
-    const C = 2 * Math.PI * 32, f = g.max ? Math.min(g.v / g.max, 1) : 0;
-    return `<button class="gauge" data-jump="${g.jump}" aria-label="${g.ja} ${g.v}件">
-      <svg viewBox="0 0 80 80"><circle class="g-ticks" cx="40" cy="40" r="39"/><circle class="g-bezel" cx="40" cy="40" r="35.5"/><circle class="g-track" cx="40" cy="40" r="32"/><circle class="g-in" cx="40" cy="40" r="28"/>
-      <circle class="g-val" cx="40" cy="40" r="32" stroke="${g.c}" stroke-dasharray="${(C * f).toFixed(1)} ${C.toFixed(1)}" style="filter:drop-shadow(0 0 4px ${g.c})"/>
-      <text x="40" y="41">${g.v}</text></svg>
-      <div class="g-en">${g.en}</div><div class="g-ja">${g.ja}</div></button>`;
-  }).join("");
-  $("#bars").innerHTML = ["work", "queue", "alert", "done"].map(id => {
-    const b = B[id];
-    return `<button class="bar" data-jump="${id}"><div class="bar-row"><div><div class="bar-en" style="${id === "alert" ? "color:var(--amber)" : ""}">${b.en}</div>
-      <div class="bar-ja">${b.ja}</div></div><div class="bar-n" style="color:${b.color}">${n[id]}</div></div>
-      <div class="bar-line"><i style="width:${(n[id] / total * 100).toFixed(1)}%;background:${b.color};color:${b.color}"></i></div></button>`;
-  }).join("");
-
-  // フィルター
-  const chips = [{ id: "all", ja: "すべて", c: "#f3dfa6", n: tasks.length }, { id: "today", ja: "今日", c: "#ff6a72", n: todays.length },
+  // 全タスクの絞り込み
+  const chips = [{ id: "all", ja: "すべて", c: "#f2f2f4", n: tasks.length }, { id: "today", ja: "今日", c: "#ffb3ba", n: todaysAll.length },
     ...BUCKETS.map(b => ({ id: b.id, ja: b.ja, c: b.color, n: n[b.id] }))];
   $("#filters").innerHTML = chips.map(c =>
     `<button class="chip" role="tab" data-f="${c.id}" aria-selected="${state.filter === c.id}"><i style="background:${c.c}"></i>${c.ja}<b>${c.n}</b></button>`).join("");
   renderList();
 
   const g = state.snap.generated;
-  $("#syncInfo").textContent = `最終同期 ${g.slice(0, 10).replaceAll("-", "/")} ${g.slice(11, 16)}（Notion → このアプリ）`;
+  $("#syncInfo").textContent = `最終同期 ${+g.slice(5, 7)}/${+g.slice(8, 10)} ${g.slice(11, 16)}（Notion → このアプリ）`;
   const bl = safeUrl(state.snap.board); $("#boardLink").href = bl || "#";
-  $("#hudSync").textContent = `SYNC ${g.slice(5, 10).replace("-", ".")} ${g.slice(11, 16)}`;
-  $("#hudLoad").textContent = `LOAD ${String(open.length).padStart(3, "0")} / ${String(tasks.length).padStart(3, "0")}`;
 }
 
-function tagsFor(t) {
-  const b = B[t.b];
-  return [
-    `<span class="tag st" style="color:${b.color};border-color:${b.color}55">${b.ja}</span>`,
-    isHigh(t) ? `<span class="tag hi">重要</span>` : "",
-    t.due ? `<span class="tag ${t.over ? "over" : "due"}">${t.over ? "期限切れ " : "期限 "}${md(t.due)}</span>` : "",
-    t.proj ? `<span class="tag">${esc(t.proj)}</span>` : "",
-    t.who ? `<span class="tag">👤 ${esc(t.who)}</span>` : "",
-  ].join("");
+function dueText(t) {
+  if (!t.due) return "";
+  const today = todayISO();
+  if (t.over) return `<span class="due over">期限切れ ${md(t.due)}</span>`;
+  return `<span class="due${t.due === today ? " soon" : ""}">${t.due === today ? "今日まで" : "期限 " + md(t.due)}</span>`;
 }
 function callItem(t) {
-  return `<a class="call" href="#t-${t.id}" data-open="${t.id}"><div class="call-title">${esc(t.name)}</div>
-    ${t.next ? `<div class="call-next">→ ${esc(t.next)}</div>` : ""}<div class="call-meta">${tagsFor(t)}</div></a>`;
+  const src = safeUrl(t.url);
+  return `<div class="call" data-open="${t.id}" role="button" tabindex="0">
+    <div class="call-top"><span class="call-dot${isHigh(t) ? " hi" : ""}"></span><div class="call-title">${esc(t.name)}</div></div>
+    ${t.next ? `<div class="call-next">${esc(t.next)}</div>` : ""}
+    <div class="call-foot">${isHigh(t) ? `<span class="badge-hi">重要</span>` : ""}${dueText(t)}
+      <a class="src" href="${src || "#"}" target="_blank" rel="noopener" aria-disabled="${!src}">元リンク</a></div></div>`;
+}
+function rowItem(t) {
+  const who = t.who ? `<b>${esc(t.who)}</b>` : "";
+  const meta = [isHigh(t) ? `<span style="color:#ffb3ba;font-weight:700">重要</span>` : "", who, t.due ? (t.over ? `<span style="color:var(--amber)">期限切れ ${md(t.due)}</span>` : `期限 ${md(t.due)}`) : ""].filter(Boolean).join("　");
+  return `<button class="row" data-open="${t.id}" style="--c:${B[t.b].color}"><span class="row-bar"></span>
+    <span class="row-main"><span class="row-title">${esc(t.name)}</span>${meta ? `<span class="row-meta" style="display:block">${meta}</span>` : ""}</span></button>`;
 }
 
 function renderList() {
@@ -198,97 +182,57 @@ function renderList() {
   if (q) list = list.filter(t => [t.name, t.proj, t.who, t.next, t.memo, t.src].join(" ").toLowerCase().includes(q));
   const order = { call: 0, alert: 1, work: 2, queue: 3, done: 4 };
   list.sort((a, b) => order[a.b] - order[b.b] || sortKey(a, b));
-  $("#taskCount").textContent = `${list.length} / ${state.tasks.length} TASKS`;
+  $("#taskCount").textContent = `${list.length}件を表示（全${state.tasks.length}件）`;
   $("#taskList").innerHTML = list.length ? list.map(t => {
-    const src = safeUrl(t.url), nt = safeUrl(t.notion);
-    return `<article class="task${state.open.has(t.id) ? " open" : ""}" id="t-${t.id}" style="--c:${B[t.b].color}">
+    const src = safeUrl(t.url), nt = safeUrl(t.notion), b = B[t.b];
+    const meta = [`<span class="st" style="color:${b.color}">${b.ja}</span>`, isHigh(t) ? `<span class="badge-hi">重要</span>` : "",
+      dueText(t), t.who ? `<span>${esc(t.who)}</span>` : ""].filter(Boolean).join("");
+    return `<article class="task${state.open.has(t.id) ? " open" : ""}" id="t-${t.id}" style="--c:${b.color}">
       <button class="task-btn" data-toggle="${t.id}" aria-expanded="${state.open.has(t.id)}">
-        <div class="task-title">${esc(t.name)}</div><div class="task-meta">${tagsFor(t)}</div>
-        ${t.next ? `<div class="task-next">→ ${esc(t.next)}</div>` : ""}</button>
+        <div class="task-title">${esc(t.name)}</div><div class="task-meta">${meta}</div>
+        ${t.next ? `<div class="task-next">${esc(t.next)}</div>` : ""}</button>
       <div class="task-more"><dl>
-        <dt>状態</dt><dd>${esc(t.st)}</dd><dt>優先度</dt><dd>${esc(t.pri || "—")}</dd>
+        <dt>プロジェクト</dt><dd>${esc(t.proj || "—")}</dd><dt>状態</dt><dd>${esc(t.st)}</dd><dt>優先度</dt><dd>${esc(t.pri || "—")}</dd>
         <dt>元の場所</dt><dd>${esc(t.src || "—")}</dd><dt>更新</dt><dd>${esc(t.upd || "—")}</dd>
         ${t.memo ? `<dt>メモ</dt><dd>${esc(t.memo)}</dd>` : ""}</dl>
-        <div class="links"><a href="${src || "#"}" target="_blank" rel="noopener" aria-disabled="${!src}">元リンク ↗</a>
-        <a class="cy" href="${nt || "#"}" target="_blank" rel="noopener" aria-disabled="${!nt}">Notionで開く ↗</a></div>
+        <div class="links"><a href="${src || "#"}" target="_blank" rel="noopener" aria-disabled="${!src}">元リンク</a>
+        <a class="cy" href="${nt || "#"}" target="_blank" rel="noopener" aria-disabled="${!nt}">Notionで開く</a></div>
       </div></article>`;
-  }).join("") : `<div class="empty" style="color:var(--sub)"><i style="border-color:var(--dim)">–</i>該当するタスクはありません</div>`;
+  }).join("") : `<div class="rows"><div class="empty">該当するタスクはありません</div></div>`;
 }
 
 function drawReactor(n, total) {
-  // 奥から：赤いブルーム → 金属の外ベゼル（反射） → 目盛り → 分類ごとの装甲帯（光沢つき） → 内ベゼル → ガラスのドーム → 芯の光
-  const cx = 170, D = Math.PI / 180, P = (r, a) => [cx + r * Math.cos(a), cx + r * Math.sin(a)];
+  // 小さく精密に：細い金の外枠 → 目盛り → 状態ごとの弧（上に薄い光沢）→ 暗いドーム → 内側の赤い光
+  const cx = 120, D = Math.PI / 180, P = (r, a) => [cx + r * Math.cos(a), cx + r * Math.sin(a)];
   const arc = (r, a0, a1) => { const [x0, y0] = P(r, a0), [x1, y1] = P(r, a1);
     return `M${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
   let ticks = "";
-  for (let i = 0; i < 120; i++) { const a = i * 3 * D, long = i % 10 === 0, mid = i % 5 === 0;
-    const [x0, y0] = P(long ? 136 : mid ? 139 : 141, a), [x1, y1] = P(146, a);
-    ticks += `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" class="${long ? "tk-l" : "tk"}"/>`; }
-  const R = 120, W = 17, order = ["call", "alert", "work", "queue", "done"];
-  let a0 = -90 * D, band = "";
+  for (let i = 0; i < 60; i++) { const a = i * 6 * D, long = i % 5 === 0;
+    const [x0, y0] = P(long ? 104 : 107, a), [x1, y1] = P(110, a);
+    ticks += `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="${long ? "rgba(230,211,163,.7)" : "rgba(255,255,255,.18)"}" stroke-width="${long ? 1.4 : 1}"/>`; }
+  const R = 92, W = 9, order = ["call", "alert", "work", "queue", "done"];
+  let a0 = -90 * D, segs = "";
   for (const id of order) {
     if (!n[id]) continue;
-    const span = 2 * Math.PI * n[id] / (total || 1), a1 = a0 + span - 1.4 * D;
-    band += `<path d="${arc(R, a0, Math.max(a1, a0 + .5 * D))}" stroke="${B[id].color}" class="band${id === "call" ? " hot" : ""}"/>`;
+    const span = 2 * Math.PI * n[id] / (total || 1), a1 = a0 + span - 2.2 * D;
+    segs += `<path d="${arc(R, a0, Math.max(a1, a0 + .6 * D))}" stroke="${B[id].color}" stroke-width="${W}" fill="none" stroke-linecap="butt"/>`;
     a0 += span;
   }
-  let seams = "";
-  for (let i = 0; i < 48; i++) { const a = i * 7.5 * D; const [x0, y0] = P(R - W / 2 - 1, a), [x1, y1] = P(R + W / 2 + 1, a);
-    seams += `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" class="seam"/>`; }
-  let bolts = "";
-  for (let i = 0; i < 8; i++) { const [x, y] = P(156, (i * 45 + 22.5) * D); bolts += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" class="bolt"/>`; }
-  const dots = [-118, -110, -102, -94].map(d => { const [x, y] = P(103, d * D); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.5" class="dot"/>`; }).join("");
   $("#reactor").innerHTML = `<title id="coreLabel">判断待ち ${n.call}件・作業中 ${n.work}件・順番待ち ${n.queue}件・要注意 ${n.alert}件・完了 ${n.done}件</title>
     <defs>
-      <radialGradient id="rBloom"><stop offset="0" stop-color="#ff5a3c" stop-opacity=".55"/><stop offset=".45" stop-color="#9e0f22" stop-opacity=".35"/><stop offset="1" stop-color="#4a0710" stop-opacity="0"/></radialGradient>
-      <linearGradient id="rGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff3c9"/><stop offset=".18" stop-color="#c9a25a"/><stop offset=".4" stop-color="#5c3f16"/><stop offset=".6" stop-color="#e8cd8a"/><stop offset=".8" stop-color="#8a6326"/><stop offset="1" stop-color="#f3dfa6"/></linearGradient>
-      <linearGradient id="rGold2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a5520"/><stop offset=".35" stop-color="#fff3c9"/><stop offset=".55" stop-color="#b98a3a"/><stop offset="1" stop-color="#4e3410"/></linearGradient>
-      <linearGradient id="rSheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".45" stop-color="#fff" stop-opacity=".06"/><stop offset=".55" stop-color="#000" stop-opacity=".15"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></linearGradient>
-      <radialGradient id="rDome" cx=".42" cy=".34" r=".8"><stop offset="0" stop-color="#7a1220"/><stop offset=".45" stop-color="#3a0610"/><stop offset=".85" stop-color="#140306"/><stop offset="1" stop-color="#050102"/></radialGradient>
-      <radialGradient id="rCore"><stop offset="0" stop-color="#fff8e8" stop-opacity=".95"/><stop offset=".22" stop-color="#ffd9a0" stop-opacity=".75"/><stop offset=".5" stop-color="#ff4a3c" stop-opacity=".45"/><stop offset="1" stop-color="#9e0f22" stop-opacity="0"/></radialGradient>
-      <linearGradient id="rGlass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
-      <filter id="rBlur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="9"/></filter>
-      <filter id="rGlow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-      <filter id="rShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#000" flood-opacity=".75"/></filter>
+      <radialGradient id="rGlow"><stop offset="0" stop-color="#ff4d5e" stop-opacity=".30"/><stop offset=".55" stop-color="#8c0e1e" stop-opacity=".16"/><stop offset="1" stop-color="#8c0e1e" stop-opacity="0"/></radialGradient>
+      <radialGradient id="rDome" cx=".45" cy=".35" r=".75"><stop offset="0" stop-color="#2a0c12"/><stop offset=".7" stop-color="#120608"/><stop offset="1" stop-color="#08080a"/></radialGradient>
+      <linearGradient id="rRim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f1e2b8"/><stop offset=".35" stop-color="#a8864a"/><stop offset=".65" stop-color="#5e4720"/><stop offset="1" stop-color="#d9c08a"/></linearGradient>
+      <linearGradient id="rSheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".25"/></linearGradient>
     </defs>
-    <style>
-      .tk{stroke:rgba(243,223,166,.32);stroke-width:1}
-      .tk-l{stroke:#f3dfa6;stroke-width:1.6}
-      .bolt{fill:url(#rGold2);stroke:#2a1a08;stroke-width:.6}
-      .trk{fill:none;stroke:#0b0305;stroke-width:${W + 4}}
-      .band{fill:none;stroke-width:${W};opacity:.92}
-      .band.hot{filter:url(#rGlow);opacity:1}
-      .sheen{fill:none;stroke:url(#rSheen);stroke-width:${W}}
-      .seam{stroke:#050102;stroke-width:1.4}
-      .dash1{fill:none;stroke:rgba(243,223,166,.5);stroke-width:1;stroke-dasharray:14 4 2 4}
-      .dash2{fill:none;stroke:rgba(255,120,110,.35);stroke-width:1;stroke-dasharray:1 5}
-      .meas{fill:none;stroke:#a8e6ff;stroke-width:1.3;opacity:.75}
-      .dot{fill:#a8e6ff;opacity:.85}
-      .spec{fill:none;stroke:#fff;stroke-linecap:round}
-      .xh{stroke:rgba(243,223,166,.25);stroke-width:.8}
-    </style>
-    <circle cx="170" cy="170" r="150" fill="url(#rBloom)" filter="url(#rBlur)"/>
-    <circle cx="170" cy="170" r="161" fill="none" stroke="#000" stroke-opacity=".6" stroke-width="10"/>
-    <circle cx="170" cy="170" r="158" fill="none" stroke="url(#rGold)" stroke-width="7" filter="url(#rShadow)"/>
-    <circle cx="170" cy="170" r="154.2" fill="none" stroke="#2a1a08" stroke-width=".8"/>
-    <circle cx="170" cy="170" r="161.6" fill="none" stroke="#fff3c9" stroke-opacity=".35" stroke-width=".6"/>
-    ${bolts}${ticks}
-    <circle class="trk" cx="170" cy="170" r="${R}"/>${band}
-    <circle class="sheen" cx="170" cy="170" r="${R}"/>${seams}
-    <circle cx="170" cy="170" r="${R + W / 2 + 2.5}" fill="none" stroke="url(#rGold2)" stroke-width="1.6"/>
-    <circle cx="170" cy="170" r="${R - W / 2 - 2.5}" fill="none" stroke="url(#rGold)" stroke-width="1.6"/>
-    <g class="rot"><circle class="dash1" cx="170" cy="170" r="104"/></g>
-    <path class="meas" d="${arc(98, 150 * D, 222 * D)}"/>${dots}
-    <g class="rot rev"><circle class="dash2" cx="170" cy="170" r="96"/></g>
-    <circle cx="170" cy="170" r="89" fill="none" stroke="url(#rGold)" stroke-width="5" filter="url(#rShadow)"/>
-    <circle cx="170" cy="170" r="86" fill="url(#rDome)"/>
-    <circle cx="170" cy="170" r="70" fill="url(#rCore)"/>
-    <circle cx="170" cy="170" r="86" fill="none" stroke="#ff6a5a" stroke-opacity=".35" stroke-width="1"/>
-    <ellipse cx="160" cy="124" rx="52" ry="22" fill="url(#rGlass)"/>
-    <path class="spec" d="${arc(158, 200 * D, 245 * D)}" stroke-opacity=".75" stroke-width="1.6"/>
-    <path class="spec" d="${arc(89, 205 * D, 240 * D)}" stroke-opacity=".6" stroke-width="1.2"/>
-    <path class="spec" d="${arc(R + W / 2, 210 * D, 236 * D)}" stroke-opacity=".35" stroke-width="1"/>
-    <line class="xh" x1="92" y1="170" x2="106" y2="170"/><line class="xh" x1="234" y1="170" x2="248" y2="170"/>`;
+    <circle cx="120" cy="120" r="120" fill="url(#rGlow)"/>
+    <circle cx="120" cy="120" r="114" fill="none" stroke="url(#rRim)" stroke-width="1.6"/>
+    ${ticks}
+    <circle cx="120" cy="120" r="${R}" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="${W}"/>${segs}
+    <circle cx="120" cy="120" r="${R}" fill="none" stroke="url(#rSheen)" stroke-width="${W}"/>
+    <circle cx="120" cy="120" r="80" fill="url(#rDome)" stroke="url(#rRim)" stroke-width="1.2"/>
+    <circle cx="120" cy="120" r="79" fill="none" stroke="rgba(255,255,255,.06)" stroke-width="1"/>
+    <path d="${arc(79, 205 * D, 245 * D)}" fill="none" stroke="rgba(255,255,255,.28)" stroke-width="1.2" stroke-linecap="round"/>`;
 }
 
 /* ---------- 操作 ---------- */
@@ -302,6 +246,7 @@ function toast(msg) {
   clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), 2600);
 }
 document.addEventListener("click", e => {
+  if (e.target.closest("a.src")) return;
   const jump = e.target.closest("[data-jump]");
   if (jump) { setFilter(jump.dataset.jump); $("#panelTasks").scrollIntoView({ behavior: "smooth" }); return; }
   const chip = e.target.closest(".chip"); if (chip) return setFilter(chip.dataset.f);
@@ -314,6 +259,10 @@ document.addEventListener("click", e => {
     state.open.add(id); setFilter("all");
     document.getElementById(`t-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
+});
+document.addEventListener("keydown", e => {
+  const c = e.target.closest?.(".call[data-open]");
+  if (c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); c.click(); }
 });
 $("#q").addEventListener("input", e => { state.q = e.target.value; renderList(); });
 $("#onlyHigh").addEventListener("click", e => {
