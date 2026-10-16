@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#010102">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="JARVIS">
+<title>J.A.R.V.I.S. — Cheers mate タスク</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="bg" aria-hidden="true"></div>
+
+<header class="top">
+  <div class="brand">
+    <svg class="mini-reactor" viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="17" class="mr-o"/><circle cx="20" cy="20" r="11" class="mr-m"/><circle cx="20" cy="20" r="5" class="mr-c"/>
+    </svg>
+    <div>
+      <div class="brand-name">J.A.R.V.I.S.</div>
+      <div class="brand-sub">PROTOCOL // <b>CHEERS MATE</b></div>
+    </div>
+  </div>
+  <span class="pill" id="sysPill"><i></i><span>起動中</span></span>
+  <button class="icon-btn" id="btnRefresh" aria-label="最新のデータを読み込む">
+    <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
+  </button>
+</header>
+
+<main id="app" hidden>
+  <section class="core" aria-label="全体の状態">
+    <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+    <span class="hud-tag a" aria-hidden="true">CORE.SYS / MK-01</span><span class="hud-tag b" aria-hidden="true" id="hudSync">SYNC --:--</span>
+    <span class="hud-tag c" aria-hidden="true" id="hudLoad">LOAD 000</span><span class="hud-tag d" aria-hidden="true">ARMOR // ONLINE</span>
+    <svg id="reactor" class="reactor" viewBox="0 0 340 340" role="img" aria-labelledby="coreLabel"></svg>
+    <div class="core-center">
+      <div class="core-top">AWAITING</div>
+      <div class="core-num" id="coreNum">0</div>
+      <div class="core-bottom">判断待ち</div>
+    </div>
+  </section>
+  <h1 class="wordmark">J.A.R.V.I.S.</h1>
+  <div class="core-pill" id="corePill"></div>
+  <p class="core-sub" id="coreSub"></p>
+  <ul class="legend" id="legend"></ul>
+
+  <section class="panel" id="panelCall">
+    <div class="panel-head"><span class="code">01</span><span class="en">AWAITING YOUR CALL</span><span class="ja">判断待ち</span><span class="dash"></span></div>
+    <div id="callList"></div>
+  </section>
+
+  <section class="panel" id="panelToday">
+    <div class="panel-head"><span class="code">02</span><span class="en">TODAY'S DIRECTIVES</span><span class="ja">今日やること</span><span class="dash"></span></div>
+    <div id="todayList"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><span class="code">03</span><span class="en">SYSTEM STATUS</span><span class="ja">稼働状況</span><span class="dash"></span></div>
+    <div class="gauges" id="gauges"></div>
+    <div class="bars" id="bars"></div>
+  </section>
+
+  <section class="panel" id="panelTasks">
+    <div class="panel-head"><span class="code">04</span><span class="en">TASK MATRIX</span><span class="ja">タスク一覧</span><span class="dash"></span></div>
+    <div class="filters" id="filters" role="tablist"></div>
+    <div class="tools">
+      <label class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+        <input id="q" type="search" placeholder="タスク・プロジェクト・担当で検索" enterkeyhint="search"></label>
+      <button class="toggle" id="onlyHigh" aria-pressed="false">重要だけ</button>
+    </div>
+    <div id="taskCount" class="count"></div>
+    <div id="taskList"></div>
+  </section>
+
+  <footer class="foot">
+    <div id="syncInfo"></div>
+    <a id="boardLink" target="_blank" rel="noopener">Notionの統合タスクボード（正本）を開く ↗</a>
+    <button class="linkish" id="btnLock">この端末から鍵を消す</button>
+  </footer>
+</main>
+
+<section id="lock" class="lock" hidden>
+  <svg class="lock-reactor" viewBox="0 0 120 120" aria-hidden="true">
+    <circle cx="60" cy="60" r="52" class="mr-o"/><circle cx="60" cy="60" r="34" class="mr-m"/><circle cx="60" cy="60" r="16" class="mr-c"/>
+  </svg>
+  <h2>IDENTITY CHECK</h2>
+  <p>パスフレーズを入れてください（この端末に一度だけ）</p>
+  <form id="lockForm">
+    <input id="pw" type="password" autocomplete="current-password" autocapitalize="off" spellcheck="false" placeholder="パスフレーズ">
+    <button type="submit">ACCESS</button>
+  </form>
+  <p class="err" id="lockErr" role="alert"></p>
+</section>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>

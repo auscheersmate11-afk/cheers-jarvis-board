@@ -1,0 +1,6 @@
+# 暗号化前のデータ・鍵は絶対に入れない
+*.plain.json
+*.key
+.DS_Store
+tools/__pycache__/
+test-shots/
