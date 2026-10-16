@@ -13,12 +13,12 @@ def reactor(size, pad):
     d = ImageDraw.Draw(im)
     for i in range(60):                             # 外周の目盛り
         a = 2 * math.pi * i / 60; r1, r2 = r * .93, r * (1.0 if i % 5 == 0 else .97)
-        d.line([c + r1 * math.cos(a), c + r1 * math.sin(a), c + r2 * math.cos(a), c + r2 * math.sin(a)], fill=(255, 225, 220), width=max(2, S // 220))
+        d.line([c + r1 * math.cos(a), c + r1 * math.sin(a), c + r2 * math.cos(a), c + r2 * math.sin(a)], fill=(243, 223, 166), width=max(2, S // 220))
     def ring(rr, col, w): d.ellipse([c - rr, c - rr, c + rr, c + rr], outline=col, width=w)
-    ring(r * .86, (235, 225, 222), S // 60)
+    ring(r * .86, (214, 176, 100), S // 45)
     for i in range(10):                             # リアクターの区切り
         a0 = 360 * i / 10 + 4; d.arc([c - r * .7, c - r * .7, c + r * .7, c + r * .7], a0, a0 + 28, fill=(255, 42, 61), width=S // 22)
-    ring(r * .5, (255, 243, 241), S // 45)
+    ring(r * .5, (243, 223, 166), S // 45)
     core = Image.new("L", (S, S), 0); ImageDraw.Draw(core).ellipse([c - r * .34, c - r * .34, c + r * .34, c + r * .34], fill=255)
     im.paste(Image.new("RGB", (S, S), (255, 60, 75)), mask=core.filter(ImageFilter.GaussianBlur(S * .03)))
     d.ellipse([c - r * .2, c - r * .2, c + r * .2, c + r * .2], fill=(255, 228, 215))

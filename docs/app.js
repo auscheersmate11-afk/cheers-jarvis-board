@@ -8,11 +8,11 @@ const CACHE_STORE = "jarvis.snap";
 
 // 5つの大分類（色は CSS 変数と同じ値）
 const BUCKETS = [
-  { id: "call",  ja: "判断待ち",    en: "AWAITING",   color: "#ff2a3d" },
+  { id: "call",  ja: "判断待ち",    en: "AWAITING",   color: "#ff3347" },
   { id: "work",  ja: "作業中",      en: "PROCESSING", color: "#a8e6ff" },
-  { id: "queue", ja: "順番待ち",    en: "QUEUE",      color: "#8d7880" },
-  { id: "alert", ja: "要注意／停止", en: "ALERT",      color: "#ffb84a" },
-  { id: "done",  ja: "完了",        en: "COMPLETE",   color: "#e9e2e0" },
+  { id: "queue", ja: "順番待ち",    en: "QUEUE",      color: "#9a8270" },
+  { id: "alert", ja: "要注意／停止", en: "ALERT",      color: "#ff8a3d" },
+  { id: "done",  ja: "完了",        en: "COMPLETE",   color: "#e8d3a0" },
 ];
 const B = Object.fromEntries(BUCKETS.map(b => [b.id, b]));
 const PRI = { "高": 0, "中": 1, "要確認": 2, "低": 3, "": 4 };
@@ -139,13 +139,13 @@ function render() {
   const gauges = [
     { en: "TODAY", ja: "今日やる", v: todays.length, max: open.length, c: "#ff6a72", jump: "today" },
     { en: "PRIORITY", ja: "重要", v: highOpen.length, max: open.length, c: "#ff2a3d", jump: "high" },
-    { en: "OVERDUE", ja: "期限切れ", v: open.filter(t => t.over).length, max: open.length, c: "#ffb84a", jump: "alert" },
-    { en: "DONE", ja: "完了", v: done, max: total, c: "#e9e2e0", jump: "done" },
+    { en: "OVERDUE", ja: "期限切れ", v: open.filter(t => t.over).length, max: open.length, c: "#ff8a3d", jump: "alert" },
+    { en: "DONE", ja: "完了", v: done, max: total, c: "#e8d3a0", jump: "done" },
   ];
   $("#gauges").innerHTML = gauges.map(g => {
     const C = 2 * Math.PI * 32, f = g.max ? Math.min(g.v / g.max, 1) : 0;
     return `<button class="gauge" data-jump="${g.jump}" aria-label="${g.ja} ${g.v}件">
-      <svg viewBox="0 0 80 80"><circle class="g-ticks" cx="40" cy="40" r="38"/><circle class="g-track" cx="40" cy="40" r="32"/><circle class="g-in" cx="40" cy="40" r="25"/>
+      <svg viewBox="0 0 80 80"><circle class="g-ticks" cx="40" cy="40" r="39"/><circle class="g-bezel" cx="40" cy="40" r="35.5"/><circle class="g-track" cx="40" cy="40" r="32"/><circle class="g-in" cx="40" cy="40" r="28"/>
       <circle class="g-val" cx="40" cy="40" r="32" stroke="${g.c}" stroke-dasharray="${(C * f).toFixed(1)} ${C.toFixed(1)}" style="filter:drop-shadow(0 0 4px ${g.c})"/>
       <text x="40" y="41">${g.v}</text></svg>
       <div class="g-en">${g.en}</div><div class="g-ja">${g.ja}</div></button>`;
@@ -154,11 +154,11 @@ function render() {
     const b = B[id];
     return `<button class="bar" data-jump="${id}"><div class="bar-row"><div><div class="bar-en" style="${id === "alert" ? "color:var(--amber)" : ""}">${b.en}</div>
       <div class="bar-ja">${b.ja}</div></div><div class="bar-n" style="color:${b.color}">${n[id]}</div></div>
-      <div class="bar-line"><i style="width:${(n[id] / total * 100).toFixed(1)}%;background:${b.color}"></i></div></button>`;
+      <div class="bar-line"><i style="width:${(n[id] / total * 100).toFixed(1)}%;background:${b.color};color:${b.color}"></i></div></button>`;
   }).join("");
 
   // フィルター
-  const chips = [{ id: "all", ja: "すべて", c: "#fff3f1", n: tasks.length }, { id: "today", ja: "今日", c: "#ff6a72", n: todays.length },
+  const chips = [{ id: "all", ja: "すべて", c: "#f3dfa6", n: tasks.length }, { id: "today", ja: "今日", c: "#ff6a72", n: todays.length },
     ...BUCKETS.map(b => ({ id: b.id, ja: b.ja, c: b.color, n: n[b.id] }))];
   $("#filters").innerHTML = chips.map(c =>
     `<button class="chip" role="tab" data-f="${c.id}" aria-selected="${state.filter === c.id}"><i style="background:${c.c}"></i>${c.ja}<b>${c.n}</b></button>`).join("");
@@ -216,71 +216,79 @@ function renderList() {
 }
 
 function drawReactor(n, total) {
-  // 340x340 の多層リング：外周の装甲フレーム → 目盛り → データの装甲帯（分類ごと）→ 白い発光リング → 芯
-  const cx = 170, P = (r, a) => [cx + r * Math.cos(a), cx + r * Math.sin(a)];
+  // 奥から：赤いブルーム → 金属の外ベゼル（反射） → 目盛り → 分類ごとの装甲帯（光沢つき） → 内ベゼル → ガラスのドーム → 芯の光
+  const cx = 170, D = Math.PI / 180, P = (r, a) => [cx + r * Math.cos(a), cx + r * Math.sin(a)];
   const arc = (r, a0, a1) => { const [x0, y0] = P(r, a0), [x1, y1] = P(r, a1);
     return `M${x0.toFixed(1)} ${y0.toFixed(1)}A${r} ${r} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${x1.toFixed(1)} ${y1.toFixed(1)}`; };
-  const D = Math.PI / 180;
-  // 外周フレーム：切れ目のある太い弧＋ブラケット
-  let frame = "";
-  [[-80, -8], [8, 62], [74, 152], [166, 236], [250, 268]].forEach(([a, b]) =>
-    frame += `<path d="${arc(160, a * D, b * D)}" class="fr"/>`);
-  [[-4, 4], [158, 162], [270, 278]].forEach(([a, b]) => frame += `<path d="${arc(160, a * D, b * D)}" class="fr-hi"/>`);
-  // 目盛り（5本ごとに長い）
   let ticks = "";
-  for (let i = 0; i < 120; i++) { const a = i * 3 * D, long = i % 5 === 0;
-    const [x0, y0] = P(long ? 139 : 142, a), [x1, y1] = P(148, a);
+  for (let i = 0; i < 120; i++) { const a = i * 3 * D, long = i % 10 === 0, mid = i % 5 === 0;
+    const [x0, y0] = P(long ? 136 : mid ? 139 : 141, a), [x1, y1] = P(146, a);
     ticks += `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" class="${long ? "tk-l" : "tk"}"/>`; }
-  // データの装甲帯：各分類の割合で弧を分け、パネルの継ぎ目で刻む
-  const R = 122, W = 18, order = ["call", "alert", "work", "queue", "done"];
+  const R = 120, W = 17, order = ["call", "alert", "work", "queue", "done"];
   let a0 = -90 * D, band = "";
   for (const id of order) {
     if (!n[id]) continue;
-    const span = 2 * Math.PI * n[id] / (total || 1), a1 = a0 + span - 1.6 * D;
-    band += `<path d="${arc(R, a0, Math.max(a1, a0 + .5 * D))}" stroke="${B[id].color}" class="band${id === "call" ? " band-hot" : ""}"/>`;
+    const span = 2 * Math.PI * n[id] / (total || 1), a1 = a0 + span - 1.4 * D;
+    band += `<path d="${arc(R, a0, Math.max(a1, a0 + .5 * D))}" stroke="${B[id].color}" class="band${id === "call" ? " hot" : ""}"/>`;
     a0 += span;
   }
-  // 装甲帯の上に継ぎ目（黒い細線）と内外の縁
   let seams = "";
-  for (let i = 0; i < 36; i++) { const a = i * 10 * D; const [x0, y0] = P(R - W / 2 - 1, a), [x1, y1] = P(R + W / 2 + 1, a);
+  for (let i = 0; i < 48; i++) { const a = i * 7.5 * D; const [x0, y0] = P(R - W / 2 - 1, a), [x1, y1] = P(R + W / 2 + 1, a);
     seams += `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" class="seam"/>`; }
-  // 白い発光リングの左に計器の細い弧（差し色）と小さな点
-  const dots = [-118, -110, -102, -94].map(d => { const [x, y] = P(104, d * D); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.6" class="dot"/>`; }).join("");
+  let bolts = "";
+  for (let i = 0; i < 8; i++) { const [x, y] = P(156, (i * 45 + 22.5) * D); bolts += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.2" class="bolt"/>`; }
+  const dots = [-118, -110, -102, -94].map(d => { const [x, y] = P(103, d * D); return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.5" class="dot"/>`; }).join("");
   $("#reactor").innerHTML = `<title id="coreLabel">判断待ち ${n.call}件・作業中 ${n.work}件・順番待ち ${n.queue}件・要注意 ${n.alert}件・完了 ${n.done}件</title>
     <defs>
-      <radialGradient id="coreGrad"><stop offset="0" stop-color="#ff2a3d" stop-opacity=".42"/><stop offset=".6" stop-color="#3a040b" stop-opacity=".7"/><stop offset="1" stop-color="#050103"/></radialGradient>
-      <filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <radialGradient id="rBloom"><stop offset="0" stop-color="#ff5a3c" stop-opacity=".55"/><stop offset=".45" stop-color="#9e0f22" stop-opacity=".35"/><stop offset="1" stop-color="#4a0710" stop-opacity="0"/></radialGradient>
+      <linearGradient id="rGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff3c9"/><stop offset=".18" stop-color="#c9a25a"/><stop offset=".4" stop-color="#5c3f16"/><stop offset=".6" stop-color="#e8cd8a"/><stop offset=".8" stop-color="#8a6326"/><stop offset="1" stop-color="#f3dfa6"/></linearGradient>
+      <linearGradient id="rGold2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7a5520"/><stop offset=".35" stop-color="#fff3c9"/><stop offset=".55" stop-color="#b98a3a"/><stop offset="1" stop-color="#4e3410"/></linearGradient>
+      <linearGradient id="rSheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".45" stop-color="#fff" stop-opacity=".06"/><stop offset=".55" stop-color="#000" stop-opacity=".15"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></linearGradient>
+      <radialGradient id="rDome" cx=".42" cy=".34" r=".8"><stop offset="0" stop-color="#7a1220"/><stop offset=".45" stop-color="#3a0610"/><stop offset=".85" stop-color="#140306"/><stop offset="1" stop-color="#050102"/></radialGradient>
+      <radialGradient id="rCore"><stop offset="0" stop-color="#fff8e8" stop-opacity=".95"/><stop offset=".22" stop-color="#ffd9a0" stop-opacity=".75"/><stop offset=".5" stop-color="#ff4a3c" stop-opacity=".45"/><stop offset="1" stop-color="#9e0f22" stop-opacity="0"/></radialGradient>
+      <linearGradient id="rGlass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+      <filter id="rBlur" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="9"/></filter>
+      <filter id="rGlow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <filter id="rShadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="2.5" flood-color="#000" flood-opacity=".75"/></filter>
     </defs>
     <style>
-      .fr{fill:none;stroke:rgba(255,243,241,.55);stroke-width:3}
-      .fr-hi{fill:none;stroke:#ff2a3d;stroke-width:6}
-      .tk{stroke:rgba(255,235,232,.28);stroke-width:1}
-      .tk-l{stroke:rgba(255,235,232,.6);stroke-width:1.3}
-      .trk{fill:none;stroke:rgba(255,255,255,.05);stroke-width:${W}}
-      .band{fill:none;stroke-width:${W};opacity:.82}
-      .band-hot{filter:url(#glow);opacity:1}
-      .seam{stroke:#010102;stroke-width:1.6}
-      .edge{fill:none;stroke:rgba(255,243,241,.25);stroke-width:.8}
-      .meas{fill:none;stroke:#a8e6ff;stroke-width:1.4;opacity:.8}
+      .tk{stroke:rgba(243,223,166,.32);stroke-width:1}
+      .tk-l{stroke:#f3dfa6;stroke-width:1.6}
+      .bolt{fill:url(#rGold2);stroke:#2a1a08;stroke-width:.6}
+      .trk{fill:none;stroke:#0b0305;stroke-width:${W + 4}}
+      .band{fill:none;stroke-width:${W};opacity:.92}
+      .band.hot{filter:url(#rGlow);opacity:1}
+      .sheen{fill:none;stroke:url(#rSheen);stroke-width:${W}}
+      .seam{stroke:#050102;stroke-width:1.4}
+      .dash1{fill:none;stroke:rgba(243,223,166,.5);stroke-width:1;stroke-dasharray:14 4 2 4}
+      .dash2{fill:none;stroke:rgba(255,120,110,.35);stroke-width:1;stroke-dasharray:1 5}
+      .meas{fill:none;stroke:#a8e6ff;stroke-width:1.3;opacity:.75}
       .dot{fill:#a8e6ff;opacity:.85}
-      .dash1{fill:none;stroke:rgba(255,90,100,.55);stroke-width:1;stroke-dasharray:14 4 2 4}
-      .dash2{fill:none;stroke:rgba(255,243,241,.25);stroke-width:1;stroke-dasharray:1 5}
-      .wr{fill:none;stroke:#fff3f1;stroke-width:3;filter:url(#glow)}
-      .inner{fill:url(#coreGrad);stroke:rgba(255,42,61,.6);stroke-width:1}
-      .xh{stroke:rgba(255,243,241,.18);stroke-width:.8}
+      .spec{fill:none;stroke:#fff;stroke-linecap:round}
+      .xh{stroke:rgba(243,223,166,.25);stroke-width:.8}
     </style>
-    ${frame}${ticks}
-    <circle class="trk" cx="170" cy="170" r="${R}"/>${band}${seams}
-    <circle cx="170" cy="170" r="${R + 4}" fill="none" stroke="rgba(255,243,241,.22)" stroke-width="1.2"/>
-    <circle cx="170" cy="170" r="${R - 6}" fill="none" stroke="rgba(1,1,2,.35)" stroke-width="5"/>
-    <circle class="edge" cx="170" cy="170" r="${R + W / 2 + 2}"/><circle class="edge" cx="170" cy="170" r="${R - W / 2 - 2}"/>
+    <circle cx="170" cy="170" r="150" fill="url(#rBloom)" filter="url(#rBlur)"/>
+    <circle cx="170" cy="170" r="161" fill="none" stroke="#000" stroke-opacity=".6" stroke-width="10"/>
+    <circle cx="170" cy="170" r="158" fill="none" stroke="url(#rGold)" stroke-width="7" filter="url(#rShadow)"/>
+    <circle cx="170" cy="170" r="154.2" fill="none" stroke="#2a1a08" stroke-width=".8"/>
+    <circle cx="170" cy="170" r="161.6" fill="none" stroke="#fff3c9" stroke-opacity=".35" stroke-width=".6"/>
+    ${bolts}${ticks}
+    <circle class="trk" cx="170" cy="170" r="${R}"/>${band}
+    <circle class="sheen" cx="170" cy="170" r="${R}"/>${seams}
+    <circle cx="170" cy="170" r="${R + W / 2 + 2.5}" fill="none" stroke="url(#rGold2)" stroke-width="1.6"/>
+    <circle cx="170" cy="170" r="${R - W / 2 - 2.5}" fill="none" stroke="url(#rGold)" stroke-width="1.6"/>
     <g class="rot"><circle class="dash1" cx="170" cy="170" r="104"/></g>
     <path class="meas" d="${arc(98, 150 * D, 222 * D)}"/>${dots}
     <g class="rot rev"><circle class="dash2" cx="170" cy="170" r="96"/></g>
-    <circle class="wr" cx="170" cy="170" r="88"/>
-    <circle class="inner" cx="170" cy="170" r="82"/>
-    <line class="xh" x1="96" y1="170" x2="112" y2="170"/><line class="xh" x1="228" y1="170" x2="244" y2="170"/>
-    <line class="xh" x1="170" y1="96" x2="170" y2="104"/><line class="xh" x1="170" y1="236" x2="170" y2="244"/>`;
+    <circle cx="170" cy="170" r="89" fill="none" stroke="url(#rGold)" stroke-width="5" filter="url(#rShadow)"/>
+    <circle cx="170" cy="170" r="86" fill="url(#rDome)"/>
+    <circle cx="170" cy="170" r="70" fill="url(#rCore)"/>
+    <circle cx="170" cy="170" r="86" fill="none" stroke="#ff6a5a" stroke-opacity=".35" stroke-width="1"/>
+    <ellipse cx="160" cy="124" rx="52" ry="22" fill="url(#rGlass)"/>
+    <path class="spec" d="${arc(158, 200 * D, 245 * D)}" stroke-opacity=".75" stroke-width="1.6"/>
+    <path class="spec" d="${arc(89, 205 * D, 240 * D)}" stroke-opacity=".6" stroke-width="1.2"/>
+    <path class="spec" d="${arc(R + W / 2, 210 * D, 236 * D)}" stroke-opacity=".35" stroke-width="1"/>
+    <line class="xh" x1="92" y1="170" x2="106" y2="170"/><line class="xh" x1="234" y1="170" x2="248" y2="170"/>`;
 }
 
 /* ---------- 操作 ---------- */
